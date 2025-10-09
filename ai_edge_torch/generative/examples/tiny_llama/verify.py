@@ -26,6 +26,11 @@ from ai_edge_torch.generative.utilities import verifier
 import transformers
 
 
+_CHECKPOINT_PATH = flags.DEFINE_string(
+    "checkpoint_path",
+    "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "Path to TinyLlama checkpoint (local path or HuggingFace model ID).",
+)
 _PROMPTS = flags.DEFINE_multi_string(
     "prompts",
     "Show me the program to add 2 and 3.",
@@ -39,22 +44,22 @@ _MAX_NEW_TOKENS = flags.DEFINE_integer(
 
 
 def main(_):
-  checkpoint = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  checkpoint = _CHECKPOINT_PATH.value
   logging.info("Loading the original model from: %s", checkpoint)
   original_model = transformers.AutoModelForCausalLM.from_pretrained(
       checkpoint, trust_remote_code=True
   )
 
-  # Locate the cached dir.
-  cached_config_file = transformers.utils.cached_file(
-      checkpoint, transformers.utils.CONFIG_NAME
-  )
-  reauthored_checkpoint = pathlib.Path(cached_config_file).parent
-  logging.info("Building the reauthored model from: %s", reauthored_checkpoint)
-  reauthored_model = tiny_llama.build_model(reauthored_checkpoint)
+  # Use the same checkpoint path for reauthored model
+  logging.info("Building the reauthored model from: %s", checkpoint)
+  reauthored_model = tiny_llama.build_model(checkpoint)
 
   logging.info("Loading the tokenizer from: %s", checkpoint)
   tokenizer = transformers.AutoTokenizer.from_pretrained(checkpoint)
+  
+  # Ensure tokenizer has pad_token set
+  if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
   verifier.verify_reauthored_model(
       original_model=transformers_verifier.TransformersModelWrapper(

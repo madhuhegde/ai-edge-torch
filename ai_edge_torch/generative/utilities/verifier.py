@@ -172,7 +172,15 @@ class TokenizerWrapper(torch.nn.Module):
 
   def encode(self, prompts: str) -> torch.Tensor:
     """Encodes the prompts to token IDs."""
-    return self.tokenizer.encode(prompts, return_tensors="pt")
+    # Check if tokenizer has a chat template and use it
+    if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
+      messages = [{'role': 'user', 'content': prompts}]
+      formatted_prompt = self.tokenizer.apply_chat_template(
+          messages, tokenize=False, add_generation_prompt=True
+      )
+      return self.tokenizer.encode(formatted_prompt, return_tensors="pt")
+    else:
+      return self.tokenizer.encode(prompts, return_tensors="pt")
 
   def decode(self, token_ids: torch.Tensor) -> str:
     """Decodes the token IDs to a string."""

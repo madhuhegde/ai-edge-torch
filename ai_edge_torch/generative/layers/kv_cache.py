@@ -147,7 +147,7 @@ def update(
     input_pos: torch.Tensor,
     k_slice: torch.Tensor,
     v_slice: torch.Tensor,
-    use_dus: bool = True,
+    use_dus: bool = False,
 ) -> KVCacheEntry:
   """Out of place update of Cache buffer.
 
@@ -180,9 +180,11 @@ def _update_kv_base_impl(
 def _get_slice_indices(positions: torch.Tensor) -> torch.Tensor:
   """Dynamic Update Slice updates are a variadic sequence of 0-rank tensors."""
 
-  zero = torch.zeros([]).int()
-  positions = positions.int()[0].reshape([])
-  return [zero, positions, zero, zero]
+  zero = torch.zeros([],dtype=torch.int32)
+  # Create a new tensor to avoid mutation during export
+  # Use torch.narrow to extract first element without mutation
+  positions_scalar = torch.narrow(positions.int(), 0, 0, 1).reshape([])
+  return [zero, positions_scalar, zero, zero]
 
 
 def _update_kv_impl(

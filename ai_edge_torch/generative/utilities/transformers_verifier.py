@@ -38,5 +38,24 @@ class TransformersModelWrapper(verifier.ModelWrapper):
   def generate(
       self, inputs: torch.Tensor, max_new_tokens: int
   ) -> torch.IntTensor:
-    gen_config = transformers.GenerationConfig(max_new_tokens=max_new_tokens)
-    return self.model.generate(inputs=inputs, generation_config=gen_config)
+    # Ensure pad_token_id is set
+    if self.model.config.pad_token_id is None:
+      self.model.config.pad_token_id = self.model.config.eos_token_id
+    
+    # Create attention mask (all 1s since we don't have padding)
+    attention_mask = torch.ones_like(inputs)
+    
+    gen_config = transformers.GenerationConfig(
+        max_new_tokens=max_new_tokens,
+        pad_token_id=self.model.config.pad_token_id,
+        eos_token_id=self.model.config.eos_token_id,
+        do_sample=False,  # Greedy decoding for deterministic output
+    )
+    
+    outputs = self.model.generate(
+        inputs=inputs,
+        attention_mask=attention_mask,
+        generation_config=gen_config
+    )
+    
+    return outputs

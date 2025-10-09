@@ -1,13 +1,13 @@
 -f https://download.pytorch.org/whl/torch/
-torch==2.5.1+cpu
+torch==2.5.1
 -f https://download.pytorch.org/whl/torchvision/
-torchvision==0.20.1+cpu
+torchvision==0.20.1
 -f https://download.pytorch.org/whl/torchaudio/
-torchaudio==2.5.1+cpu
+torchaudio==2.5.1
 --pre
-tf-nightly>=2.19.0.dev20241201
-ai-edge-litert-nightly
-ai-edge-quantizer-nightly
+tensorflow>=2.19.0
+ai-edge-litert
+ai-edge-quantizer
 jax[cpu]
 torch-xla2[odml]>=0.0.1.dev20241201
 scipy
