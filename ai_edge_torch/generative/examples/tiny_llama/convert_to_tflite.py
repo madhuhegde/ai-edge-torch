@@ -49,11 +49,18 @@ _QUANTIZE = flags.DEFINE_bool(
     True,
     'Whether the model should be quantized.',
 )
+_USE_FLASH_ATTENTION = flags.DEFINE_bool(
+    'use_flash_attention',
+    False,
+    'Whether to use Flash Attention for memory-efficient attention (O(N) memory).',
+)
 
 
 def main(_):
   pytorch_model = tiny_llama.build_model(
-      _CHECKPOINT_PATH.value, kv_cache_max_len=_KV_CACHE_MAX_LEN.value
+      _CHECKPOINT_PATH.value,
+      kv_cache_max_len=_KV_CACHE_MAX_LEN.value,
+      use_flash_attention=_USE_FLASH_ATTENTION.value,
   )
   quant_suffix = 'q8' if _QUANTIZE.value else 'f32'
   output_filename = (

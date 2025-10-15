@@ -73,12 +73,25 @@ class TransformerBlock(nn.Module):
         model_config.embedding_dim,
         config.pre_attention_norm_config,
     )
-    self.atten_func = CausalSelfAttention(
-        model_config.batch_size,
-        model_config.embedding_dim,
-        config.attn_config,
-        model_config.enable_hlfb,
-    )
+    
+    # Use Flash Attention if enabled in model config
+    use_flash = getattr(model_config, 'use_flash_attention', False)
+    if use_flash:
+      self.atten_func = FlashCausalSelfAttention(
+          model_config.batch_size,
+          model_config.embedding_dim,
+          config.attn_config,
+          model_config.enable_hlfb,
+          use_flash_attention=True,
+      )
+    else:
+      self.atten_func = CausalSelfAttention(
+          model_config.batch_size,
+          model_config.embedding_dim,
+          config.attn_config,
+          model_config.enable_hlfb,
+      )
+    
     self.post_atten_norm = builder.build_norm(
         model_config.embedding_dim,
         config.post_attention_norm_config,
@@ -257,6 +270,50 @@ class CausalSelfAttention(nn.Module):
     # Compute the output projection.
     y = self.output_projection(y)
     return y if kv_cache is None else (y, kv_cache)
+
+
+class FlashCausalSelfAttention(CausalSelfAttention):
+  """Causal Self Attention with Flash Attention implementation.
+  
+  This class extends CausalSelfAttention to optionally use Flash Attention
+  for the scaled dot-product attention computation. Flash Attention provides
+  O(N) memory complexity instead of O(N²), enabling longer sequences.
+  
+  All other features (RoPE, KV cache, GQA, HLFB) remain unchanged.
+  """
+  
+  def __init__(
+      self,
+      batch_size: int,
+      dim: int,
+      config: cfg.AttentionConfig,
+      enable_hlfb: bool,
+      use_flash_attention: bool = True,
+  ) -> None:
+    """Initialize FlashCausalSelfAttention.
+    
+    Args:
+        batch_size: Batch size of the input tensor.
+        dim: Causal attention's input/output dimension.
+        config: Attention specific configurations.
+        enable_hlfb: Whether HLFB is enabled or not.
+        use_flash_attention: Whether to use Flash Attention (default: True).
+    """
+    super().__init__(batch_size, dim, config, enable_hlfb)
+    self.use_flash_attention = use_flash_attention
+    
+    # Override sdpa_func to use Flash Attention if enabled
+    if use_flash_attention:
+      try:
+        from ai_edge_torch.generative.layers import flash_attention_adapter
+        self.sdpa_func = (
+            flash_attention_adapter.flash_attention_with_hlfb
+            if enable_hlfb
+            else flash_attention_adapter.flash_attention_causal_inference
+        )
+      except ImportError:
+        # Fall back to standard SDPA if flash_attention_adapter not available
+        self.use_flash_attention = False
 
 
 class SelfAttention(CausalSelfAttention):

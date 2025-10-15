@@ -209,6 +209,10 @@ class ModelConfig:
   # Whether to turn on high-level function boundary.
   enable_hlfb: bool = False
 
+  # Whether to use Flash Attention for memory-efficient attention computation.
+  # Flash Attention reduces memory from O(N²) to O(N), enabling longer sequences.
+  use_flash_attention: bool = False
+
   # The maximum sequence length of the KV cache. Should not exceed max_seq_len.
   kv_cache_max_len: int = 0
 

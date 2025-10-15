@@ -27,12 +27,18 @@ class TinyLlama(model_builder.DecoderOnlyModel):
   pass
 
 
-def get_model_config(kv_cache_max_len: int = 1024) -> cfg.ModelConfig:
+def get_model_config(
+    kv_cache_max_len: int = 1024,
+    use_flash_attention: bool = False
+) -> cfg.ModelConfig:
   """Returns the model config for a TinyLlama model.
 
   Args:
     kv_cache_max_len (int): The maximum sequence length of the KV cache. Default
       is 1024.
+    use_flash_attention (bool): Whether to use Flash Attention for memory-efficient
+      attention computation. Flash Attention uses O(N) memory instead of O(N²),
+      enabling longer sequences. Default is False.
 
   Returns:
     The model config for a TinyLlama model.
@@ -66,6 +72,7 @@ def get_model_config(kv_cache_max_len: int = 1024) -> cfg.ModelConfig:
       final_norm_config=norm_config,
       lm_head_share_weight_with_embedding=False,
       enable_hlfb=True,
+      use_flash_attention=use_flash_attention,
   )
   return config
 
