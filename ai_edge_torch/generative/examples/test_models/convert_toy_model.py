@@ -14,6 +14,7 @@
 # ==============================================================================
 # A toy example which has a single-layer transformer block.
 from absl import app
+
 import ai_edge_torch
 from ai_edge_torch import lowertools
 from ai_edge_torch.generative.examples.test_models import toy_model
@@ -27,6 +28,7 @@ KV_CACHE_MAX_LEN = 100
 def convert_toy_model(_) -> None:
   """Converts a toy model to tflite."""
   model = toy_model.ToySingleLayerModel(toy_model.get_model_config())
+  model.eval()  # Set model to evaluation mode
   idx = torch.unsqueeze(torch.arange(0, KV_CACHE_MAX_LEN), 0)
   input_pos = torch.arange(0, KV_CACHE_MAX_LEN)
   print('running an inference')

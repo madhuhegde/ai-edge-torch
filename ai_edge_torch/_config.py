@@ -18,6 +18,19 @@
 import functools
 import logging
 import os
+import warnings
+
+# Configure JAX to use CPU only to avoid device capability warnings
+# This must be set before JAX is imported anywhere
+if 'JAX_PLATFORMS' not in os.environ:
+  os.environ['JAX_PLATFORMS'] = 'cpu'
+
+# Suppress the JAX backend device capability warning from torch.distributed
+warnings.filterwarnings(
+    'ignore',
+    message='.*Device capability of jax unspecified.*',
+    category=UserWarning
+)
 
 __all__ = ["config"]
 
