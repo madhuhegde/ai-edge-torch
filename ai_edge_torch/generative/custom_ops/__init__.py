@@ -13,3 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 # This module contains custom torch ops for generative.
+
+from ai_edge_torch.generative.custom_ops.custom_rms_norm import custom_rms_norm
+
+__all__ = ['custom_rms_norm']

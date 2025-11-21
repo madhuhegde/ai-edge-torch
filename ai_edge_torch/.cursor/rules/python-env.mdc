@@ -1,0 +1,73 @@
+---
+description: Always activate ai_edge_torch_env using micromamba to run Python programs
+globs:
+alwaysApply: true
+---
+# Python Environment Activation
+
+## Rule: Always Use ai_edge_torch_env
+
+**ALWAYS** activate the `ai_edge_torch_env` micromamba environment when running Python scripts and applications in this project.
+
+```bash
+# Activate environment
+micromamba activate ai_edge_torch_env
+```
+
+## Running Python Programs
+
+### Execute Python Scripts
+
+```bash
+# Good: Using micromamba environment
+micromamba run -n ai_edge_torch_env python script.py
+
+# Bad: Using system Python
+python script.py
+```
+
+### Run Tests
+
+```bash
+# Run pytest in the environment
+micromamba run -n ai_edge_torch_env python -m pytest path/to/tests -v
+```
+
+### Run Python Modules
+
+```bash
+# Execute modules in environment
+micromamba run -n ai_edge_torch_env python -m module_name
+```
+
+### Interactive Python Shell
+
+```bash
+# Interactive shell in environment
+micromamba run -n ai_edge_torch_env python
+```
+
+## Best Practices
+
+### DO:
+✅ Always use `micromamba run -n ai_edge_torch_env` for Python commands
+✅ Activate environment with `micromamba activate ai_edge_torch_env` for shell sessions
+
+### DON'T:
+❌ Use system Python directly
+❌ Use other virtual environments (venv, conda, etc.)
+❌ Run Python scripts without activating the environment
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Activate environment | `micromamba activate ai_edge_torch_env` |
+| Run script | `micromamba run -n ai_edge_torch_env python script.py` |
+| Run tests | `micromamba run -n ai_edge_torch_env python -m pytest tests/` |
+| Run module | `micromamba run -n ai_edge_torch_env python -m module` |
+| Interactive shell | `micromamba run -n ai_edge_torch_env python` |
+
+---
+
+**Remember:** The ai_edge_torch_env environment contains all required Python libraries for this project.

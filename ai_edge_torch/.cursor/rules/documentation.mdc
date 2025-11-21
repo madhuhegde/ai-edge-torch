@@ -1,0 +1,155 @@
+---
+description: Documentation structure - create memory banks in .cursor/memory-banks/
+globs:
+alwaysApply: false
+---
+# Documentation Structure
+
+## Rule: Create Memory Banks for Documentation
+
+When creating documentation for a new feature, implementation, or concept, **ALWAYS** create a dedicated folder in `.cursor/memory-banks/` with markdown files.
+
+## Memory Bank Structure
+
+```
+.cursor/
+└── memory-banks/
+    ├── custom_rms_norm/
+    │   ├── overview.md
+    │   ├── implementation.md
+    │   ├── usage.md
+    │   └── examples.md
+    ├── another-feature/
+    │   ├── overview.md
+    │   └── details.md
+    └── ...
+```
+
+## Creating a New Memory Bank
+
+### Step 1: Create Folder
+
+```bash
+# Create a new memory bank folder
+mkdir -p .cursor/memory-banks/feature-name/
+
+# Example: For custom RMS norm operator
+mkdir -p .cursor/memory-banks/custom_rms_norm/
+```
+
+### Step 2: Create Documentation Files
+
+All documentation must be in **markdown (.md) format**.
+
+```bash
+# Create markdown files for your documentation
+touch .cursor/memory-banks/feature-name/overview.md
+touch .cursor/memory-banks/feature-name/implementation.md
+touch .cursor/memory-banks/feature-name/usage.md
+```
+
+## Naming Convention
+
+### Folder Names
+- Use kebab-case: `custom-rms-norm`, `feature-name`, `implementation-guide`
+- Use underscores if needed: `custom_rms_norm`, `feature_name`
+- Be descriptive and specific
+- Keep names concise
+
+### File Names
+- Use kebab-case: `overview.md`, `implementation-details.md`
+- Use underscores if needed: `usage_examples.md`
+- Always use `.md` extension
+- Common file names:
+  - `overview.md` - High-level summary
+  - `implementation.md` - Implementation details
+  - `usage.md` - How to use
+  - `examples.md` - Code examples
+  - `architecture.md` - Architecture diagrams and design
+  - `troubleshooting.md` - Common issues and solutions
+
+## Example: Custom RMS Norm Documentation
+
+```
+.cursor/memory-banks/custom_rms_norm/
+├── overview.md              # What is custom RMS norm
+├── implementation.md        # How it's implemented (Python, C++)
+├── usage.md                 # How to use the operator
+├── examples.md              # Code examples
+├── build-instructions.md    # How to build the C++ kernel
+└── troubleshooting.md       # Common issues
+```
+
+## Documentation Content Guidelines
+
+### Each markdown file should include:
+
+1. **Clear title** at the top
+2. **Table of contents** for longer documents
+3. **Code examples** with syntax highlighting
+4. **Step-by-step instructions** where applicable
+5. **Cross-references** to related files
+
+### Example markdown structure:
+
+```markdown
+# Feature Name
+
+## Overview
+Brief description of the feature.
+
+## Key Concepts
+- Concept 1
+- Concept 2
+
+## Implementation
+Detailed implementation information.
+
+## Usage Example
+​```python
+# Example code
+​```
+
+## See Also
+- [Related Feature](../related-feature/overview.md)
+- [Implementation Details](./implementation.md)
+```
+
+## Best Practices
+
+### DO:
+✅ Create a dedicated folder for each major feature/concept
+✅ Use markdown (.md) format for all documentation
+✅ Organize related documentation in the same folder
+✅ Use clear, descriptive file names
+✅ Include code examples and diagrams
+✅ Cross-reference related documentation
+
+### DON'T:
+❌ Put documentation in the project root
+❌ Mix documentation with source code
+❌ Use non-markdown formats without good reason
+❌ Create overly nested folder structures
+❌ Duplicate information across files
+
+## When to Create a Memory Bank
+
+Create a new memory bank when:
+- Implementing a new major feature
+- Adding a complex subsystem
+- Documenting architecture decisions
+- Creating integration guides
+- Explaining intricate workflows
+- Providing learning resources
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Create memory bank | `mkdir -p .cursor/memory-banks/feature-name/` |
+| Create markdown file | `touch .cursor/memory-banks/feature-name/file.md` |
+| List memory banks | `ls -la .cursor/memory-banks/` |
+
+---
+
+**Remember:** Memory banks help maintain organized, accessible documentation for complex features and implementations.
