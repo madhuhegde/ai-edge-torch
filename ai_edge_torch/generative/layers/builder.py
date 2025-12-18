@@ -81,6 +81,7 @@ def build_norm(
         with_scale=config.with_scale,
         scale_shift=config.scale_shift,
         enable_hlfb=config.enable_hlfb,
+        use_custom_rms_norm=config.use_custom_rms_norm,
         init_fn=init_fn,
     )
   elif config.type == cfg.NormalizationType.LAYER_NORM:

@@ -67,6 +67,7 @@ class NormalizationConfig:
 
   type: NormalizationType = NormalizationType.NONE
   enable_hlfb: bool = True
+  use_custom_rms_norm: bool = False
   epsilon: float = 1e-5
   zero_centered: bool = False
   # Whether to use a scale parameter in the normalization.

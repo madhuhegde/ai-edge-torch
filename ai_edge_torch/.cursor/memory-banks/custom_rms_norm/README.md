@@ -3,6 +3,7 @@
 ## Quick Links
 
 - **[Quick Start](./quickstart.md)** - 5-minute getting started guide ⭐
+- **[Gemma3 Usage](./gemma3_usage.md)** - Using with Gemma3 models ⭐
 - **[Overview](./overview.md)** - Introduction to custom RMS norm
 - **[Usage Guide](./usage.md)** - How to use the operator
 - **[Implementation](./implementation.md)** - Technical details

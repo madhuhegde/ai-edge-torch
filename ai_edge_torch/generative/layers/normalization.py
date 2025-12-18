@@ -33,6 +33,7 @@ class RMSNorm(torch.nn.Module):
       with_scale: bool = False,
       scale_shift: float = 1.0,
       enable_hlfb: bool = False,
+      use_custom_rms_norm: bool = False,
       init_fn: Callable[..., torch.Tensor] = lambda *args, **kwargs: None,
   ):
     """Initialize the RMSNorm layer.
@@ -45,12 +46,14 @@ class RMSNorm(torch.nn.Module):
       with_scale (bool): Whether or not to use a scale parameter.
       scale_shift (float): The shift to apply to the scale parameter.
       enable_hlfb (bool): use HLFB in the op.
+      use_custom_rms_norm (bool): use custom_rms_norm op with stablehlo.custom_call.
       init_fn: The initialization function to use for the parameters. This is
         used to initialize the scale parameter.
     """
     super().__init__()
     self.dim = dim
     self.enable_hlfb = enable_hlfb
+    self.use_custom_rms_norm = use_custom_rms_norm
     self.eps = eps
     self.weight = torch.nn.Parameter(torch.ones(dim), requires_grad=False)
     init_fn(self.weight)
@@ -92,7 +95,15 @@ class RMSNorm(torch.nn.Module):
         if self.with_scale
         else torch.ones((self.dim,), dtype=torch.float32)
     )
-    if self.enable_hlfb:
+    
+    if self.use_custom_rms_norm:
+      # Use custom_rms_norm from generative/custom_ops
+      from ai_edge_torch.generative.custom_ops.custom_rms_norm import custom_rms_norm
+      # Combine weight and scale into single weight parameter
+      combined_weight = w * final_scale
+      output = custom_rms_norm(x.float(), combined_weight, self.eps)
+      return output.type_as(x)
+    elif self.enable_hlfb:
       return rms_norm_with_hlfb(
           x,
           w,
