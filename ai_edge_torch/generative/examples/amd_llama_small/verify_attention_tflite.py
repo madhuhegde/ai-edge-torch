@@ -80,14 +80,14 @@ def create_test_inputs(kv_len: int = 512, num_heads: int = 12, head_dim: int = 6
   torch.manual_seed(seed)
   np.random.seed(seed)
 
-  # Query: [batch=1, seq_len=1, num_heads, head_dim]
-  q = torch.randn(1, 1, num_heads, head_dim, dtype=torch.float32)
+  # Query: [batch=1, num_heads, seq_len=1, head_dim]
+  q = torch.randn(1, num_heads, 1, head_dim, dtype=torch.float32)
 
-  # Key: [batch=1, kv_len, num_heads, head_dim]
-  k = torch.randn(1, kv_len, num_heads, head_dim, dtype=torch.float32)
+  # Key: [batch=1, num_heads, kv_len, head_dim]
+  k = torch.randn(1, num_heads, kv_len, head_dim, dtype=torch.float32)
 
-  # Value: [batch=1, kv_len, num_heads, head_dim]
-  v = torch.randn(1, kv_len, num_heads, head_dim, dtype=torch.float32)
+  # Value: [batch=1, num_heads, kv_len, head_dim]
+  v = torch.randn(1, num_heads, kv_len, head_dim, dtype=torch.float32)
 
   # Mask: [batch=1, 1, 1, kv_len] (causal mask or zeros)
   mask = torch.zeros(1, 1, 1, kv_len, dtype=torch.float32)

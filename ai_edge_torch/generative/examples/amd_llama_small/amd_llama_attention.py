@@ -22,8 +22,7 @@ This model is designed to be exported to TFLite without StableHLO composite oper
 
 import torch
 from torch import nn
-
-from ai_edge_torch.generative.layers import scaled_dot_product_attention as sdpa
+import torch.nn.functional as F
 
 
 class AttentionOnlyModel(nn.Module):
@@ -35,13 +34,13 @@ class AttentionOnlyModel(nn.Module):
   - No weights (stateless)
 
   Input shapes for decode:
-    - q: [1, 1, num_heads, head_dim] (batch=1, seq_len=1, num_heads, head_dim)
-    - k: [1, kv_len, num_heads, head_dim] (batch=1, kv_seq_len, num_heads, head_dim)
-    - v: [1, kv_len, num_heads, head_dim] (batch=1, kv_seq_len, num_heads, head_dim)
+    - q: [1, num_heads, 1, head_dim] (batch=1, num_heads, seq_len=1, head_dim)
+    - k: [1, num_heads, kv_len, head_dim] (batch=1, num_heads, kv_seq_len, head_dim)
+    - v: [1, num_heads, kv_len, head_dim] (batch=1, num_heads, kv_seq_len, head_dim)
     - mask: [1, 1, 1, kv_len] (batch=1, 1, 1, kv_seq_len)
 
   Output shape:
-    - [1, 1, num_heads, head_dim] (batch=1, seq_len=1, num_heads, head_dim)
+    - [1, num_heads, 1, head_dim] (batch=1, num_heads, seq_len=1, head_dim)
   """
 
   def __init__(self, head_dim: int = 64, num_heads: int = 12):
@@ -54,6 +53,7 @@ class AttentionOnlyModel(nn.Module):
     super().__init__()
     self.head_dim = head_dim
     self.num_heads = num_heads
+    self.scale = head_dim ** -0.5
 
   def forward(
       self,
@@ -65,25 +65,28 @@ class AttentionOnlyModel(nn.Module):
     """Forward pass of attention-only model.
 
     Args:
-      q: Query tensor with shape [B, T, N, H] where B=batch, T=seq_len, N=num_heads, H=head_dim
-      k: Key tensor with shape [B, KV_LEN, N, H]
-      v: Value tensor with shape [B, KV_LEN, N, H]
+      q: Query tensor with shape [B, N, T, H] where B=batch, N=num_heads, T=seq_len, H=head_dim
+      k: Key tensor with shape [B, N, KV_LEN, H]
+      v: Value tensor with shape [B, N, KV_LEN, H]
       mask: Attention mask tensor with shape [B, 1, 1, KV_LEN]
 
     Returns:
-      Attention output tensor with shape [B, T, N, H]
+      Attention output tensor with shape [B, N, T, H]
     """
-    # Use scaled_dot_product_attention (NOT _with_hlfb) to avoid StableHLO composite
-    # This will decompose into standard TFLite ops instead of STABLEHLO_COMPOSITE
-    output = sdpa.scaled_dot_product_attention(
-        q=q,
-        k=k,
-        v=v,
-        head_size=self.head_dim,
-        mask=mask,
-        scale=None,  # Will use default: 1.0 / sqrt(head_dim)
-        softcap=None,
-        alibi_bias=None,
-    )
+    # Scale Q before matmul
+    q = q * self.scale
+    
+    # Compute attention scores: Q @ K^T
+    scores = torch.matmul(q, k.transpose(-2, -1))  # [B, N, T, KV_LEN]
+    
+    # Apply mask
+    scores = scores + mask
+    
+    # Softmax
+    attn_weights = F.softmax(scores, dim=-1)  # [B, N, T, KV_LEN]
+    
+    # Apply attention to values
+    output = torch.matmul(attn_weights, v)  # [B, N, T, H]
+    
     return output
 
