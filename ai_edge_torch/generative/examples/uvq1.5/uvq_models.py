@@ -226,7 +226,8 @@ class DistortionNet3PatchWrapper(nn.Module):
                              3 patches in TensorFlow format [B, H, W, C]
         
         Returns:
-            features: Tensor of shape (1, 8, 24, 128) - 3 patches aggregated horizontally
+            features: Tensor of shape (3, 8, 8, 128) - 3 individual patch features
+                      Application code will aggregate these horizontally using 4D operations
         """
         # Convert from TensorFlow format (B, H, W, C) to PyTorch format (B, C, H, W)
         video_patches_3 = video_patches_3.permute(0, 3, 1, 2).contiguous()
@@ -235,39 +236,9 @@ class DistortionNet3PatchWrapper(nn.Module):
         # Output is [3, 8, 8, 128] (NHWC) due to PermuteLayerNHWC in the model
         patch_features = self.distortion_net.model(video_patches_3)
         
-        # Aggregate 3 patches horizontally using the correct PyTorch logic
-        # Input: [3, 8, 8, 128]
-        # We want to arrange them as: [1, 8, 24, 128] (one row of 3 patches)
-        
-        batch_size = 1
-        num_patches_x = 3  # 3 patches horizontally
-        patch_feature_height = 8
-        patch_feature_width = 8
-        feature_channels = 128
-        
-        # Reshape to [1, 1, 3, 8, 8, 128] to match PyTorch's structure
-        # (batch=1, num_patches_y=1, num_patches_x=3, patch_h=8, patch_w=8, channels=128)
-        features = patch_features.reshape(
-            batch_size,
-            1,  # num_patches_y = 1 (single row)
-            num_patches_x,
-            patch_feature_height,
-            patch_feature_width,
-            feature_channels,
-        )
-        
-        # Permute to [1, 1, 8, 3, 8, 128]
-        features = features.permute(0, 1, 3, 2, 4, 5).contiguous()
-        
-        # Reshape to [1, 8, 24, 128]
-        features = features.reshape(
-            batch_size,
-            1 * patch_feature_height,  # 8
-            num_patches_x * patch_feature_width,  # 24
-            feature_channels,
-        )
-        
-        return features
+        # Return individual patch features without aggregation
+        # The aggregation will be done in application code using 4D operations
+        return patch_features
 
 
 class UVQ1p5Core(nn.Module):
