@@ -120,38 +120,36 @@ class DistortionNetWrapper(nn.Module):
         # Output is [9, 8, 8, 128] (NHWC) due to PermuteLayerNHWC in the model
         patch_features = self.distortion_net.model(video_patches)
         
-        # Match the exact reshape logic from PyTorch DistortionNet.forward()
-        # batch_features shape: [9, 8, 8, 128] (NHWC)
+        # Aggregate 9 patches into 3x3 grid using 4D-only operations
+        # This matches PyTorch's 3x3 aggregation logic exactly
+        # Input: [9, 8, 8, 128] (NHWC)
+        # Output: [1, 24, 24, 128] (NHWC)
+        
         batch_size = patch_features.shape[0] // 9
-        num_patches_y = 3
-        num_patches_x = 3
-        patch_feature_height = 8
-        patch_feature_width = 8
-        feature_channels = 128
         
-        # Reshape to [batch, num_patches_y, num_patches_x, patch_feature_height, patch_feature_width, feature_channels]
-        # For batch=1: [1, 3, 3, 8, 8, 128]
-        features = patch_features.reshape(
-            batch_size,
-            num_patches_y,
-            num_patches_x,
-            patch_feature_height,
-            patch_feature_width,
-            feature_channels,
-        )
+        # PyTorch does: reshape([1,3,3,8,8,128]) -> permute(0,1,3,2,4,5) -> reshape([1,24,24,128])
+        # The permute interleaves dimensions: [batch, rows, rows_h, cols, cols_w, ch]
+        # We replicate this with 4D operations
         
-        # Permute to [batch, num_patches_y, patch_feature_height, num_patches_x, patch_feature_width, feature_channels]
-        # For batch=1: [1, 3, 8, 3, 8, 128]
-        features = features.permute(0, 1, 3, 2, 4, 5).contiguous()
+        # Step 1: Reshape [9, 8, 8, 128] -> [3, 3, 8, 8, 128]
+        # Groups into 3 rows of 3 patches: [0,1,2], [3,4,5], [6,7,8]
+        features = patch_features.reshape(3, 3, 8, 8, 128)
         
-        # Reshape to [batch, num_patches_y * patch_feature_height, num_patches_x * patch_feature_width, feature_channels]
-        # For batch=1: [1, 24, 24, 128]
-        features = features.reshape(
-            batch_size,
-            num_patches_y * patch_feature_height,
-            num_patches_x * patch_feature_width,
-            feature_channels,
-        )
+        # Step 2: Permute [3, 3, 8, 8, 128] -> [3, 8, 3, 8, 128]
+        # Interleaves: [rows, patch_h, cols, patch_w, channels]
+        features = features.permute(0, 2, 1, 3, 4).contiguous()
+        
+        # Step 3: Reshape [3, 8, 3, 8, 128] -> [3, 8, 24, 128]
+        # Flattens cols and patch_w: 3 cols * 8 width = 24
+        features = features.reshape(3, 8, 24, 128)
+        
+        # Step 4: Permute [3, 8, 24, 128] -> [8, 3, 24, 128]
+        # Moves height dimension first
+        features = features.permute(1, 0, 2, 3).contiguous()
+        
+        # Step 5: Reshape [8, 3, 24, 128] -> [1, 24, 24, 128]
+        # Flattens height and rows: 8 height * 3 rows = 24
+        features = features.reshape(batch_size, 24, 24, 128)
         
         return features
 
@@ -241,6 +239,49 @@ class DistortionNet3PatchWrapper(nn.Module):
         return patch_features
 
 
+class DistortionNet9PatchWrapper(nn.Module):
+    """Wrapper for DistortionNet that processes 9 patches without aggregation.
+    
+    This model takes 9 patches as input and outputs their individual features.
+    The aggregation is handled in the application code using 5D operations.
+    """
+    
+    def __init__(self, model_path=None, eval_mode=True):
+        super().__init__()
+        if model_path is None:
+            model_path = Path.home() / "work" / "models" / "UVQ" / "uvq1.5" / "distortion_net.pth"
+        
+        self.distortion_net = distortionnet.DistortionNet(
+            model_path=str(model_path),
+            eval_mode=eval_mode,
+            pretrained=True,
+        )
+        
+        if eval_mode:
+            self.eval()
+    
+    def forward(self, video_patches_9):
+        """
+        Args:
+            video_patches_9: Tensor of shape (9, height=360, width=640, channels=3)
+                             9 patches in TensorFlow format [B, H, W, C]
+        
+        Returns:
+            features: Tensor of shape (9, 8, 8, 128) - 9 individual patch features
+                      Application code will aggregate these using 5D operations
+        """
+        # Convert from TensorFlow format (B, H, W, C) to PyTorch format (B, C, H, W)
+        video_patches_9 = video_patches_9.permute(0, 3, 1, 2).contiguous()
+        
+        # Process patches through DistortionNet core
+        # Output is [9, 8, 8, 128] (NHWC) due to PermuteLayerNHWC in the model
+        patch_features = self.distortion_net.model(video_patches_9)
+        
+        # Return individual patch features without aggregation
+        # The aggregation will be done in application code using 5D operations
+        return patch_features
+
+
 class UVQ1p5Core(nn.Module):
     """Complete UVQ 1.5 model combining all three networks.
     
@@ -301,6 +342,13 @@ def create_aggregation_net(model_path=None):
 def create_distortion_net_3patch(model_path=None):
     """Create DistortionNet 3-patch model for TFLite conversion."""
     model = DistortionNet3PatchWrapper(model_path=model_path, eval_mode=True)
+    model.eval()
+    return model
+
+
+def create_distortion_net_9patch(model_path=None):
+    """Create DistortionNet 9-patch model for TFLite conversion."""
+    model = DistortionNet9PatchWrapper(model_path=model_path, eval_mode=True)
     model.eval()
     return model
 
