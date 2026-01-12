@@ -90,7 +90,8 @@ def test_embedder(image_path, output_dir="./test_results"):
     output_details = embedder.get_output_details()
     
     # Prepare inputs
-    img_np = img_tensor.numpy().astype(np.float32)
+    # Convert from NCHW (PyTorch) to NHWC (TFLite)
+    img_np = img_tensor.permute(0, 2, 3, 1).numpy().astype(np.float32)  # BxCxHxW -> BxHxWxC
     msg_np = msg_tensor.numpy().astype(np.float32)
     
     # Run inference
@@ -99,8 +100,10 @@ def test_embedder(image_path, output_dir="./test_results"):
     embedder.invoke()
     img_w_tflite_np = embedder.get_tensor(output_details[0]['index'])
     
+    # Convert from NHWC (TFLite) to NCHW (PyTorch) for comparison
+    img_w_tflite = torch.from_numpy(img_w_tflite_np).permute(0, 3, 1, 2)  # BxHxWxC -> BxCxHxW
+    
     # Calculate PSNR
-    img_w_tflite = torch.from_numpy(img_w_tflite_np)
     mse_tflite = torch.mean((img_w_tflite - img_tensor) ** 2)
     psnr_tflite = 10 * torch.log10(1.0 / mse_tflite)
     
@@ -173,7 +176,8 @@ def test_detector(img_pytorch, img_tflite, original_message, output_dir="./test_
     output_details = detector.get_output_details()
     
     # Detect from TFLite-embedded image
-    img_tflite_np = img_tflite.numpy().astype(np.float32)
+    # Convert from NCHW (PyTorch) to NHWC (TFLite)
+    img_tflite_np = img_tflite.permute(0, 2, 3, 1).numpy().astype(np.float32)  # BxCxHxW -> BxHxWxC
     detector.set_tensor(input_details[0]['index'], img_tflite_np)
     detector.invoke()
     output_tflite = detector.get_tensor(output_details[0]['index'])

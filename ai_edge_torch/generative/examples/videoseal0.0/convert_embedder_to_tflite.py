@@ -84,13 +84,13 @@ def convert_embedder(output_dir, model_name="videoseal_0.0", image_size=256, sim
     model = create_embedder(model_name=model_name, simple=simple)
     
     # Create sample inputs
-    # Image: (batch=1, channels=3, height, width) in [0, 1] range
+    # Image: (batch=1, height, width, channels=3) in [0, 1] range (NHWC format)
     # Message: (batch=1, 96) with binary values (0 or 1)
-    sample_img = torch.rand(1, 3, image_size, image_size)
+    sample_img = torch.rand(1, image_size, image_size, 3)
     sample_msg = torch.randint(0, 2, (1, 96)).float()
     
     print(f"\nInput shapes:")
-    print(f"  Image: {sample_img.shape} in range [{sample_img.min():.2f}, {sample_img.max():.2f}]")
+    print(f"  Image: {sample_img.shape} in range [{sample_img.min():.2f}, {sample_img.max():.2f}] (NHWC format)")
     print(f"  Message: {sample_msg.shape} with {sample_msg.sum().int().item()}/96 bits set to 1")
     
     # Test forward pass

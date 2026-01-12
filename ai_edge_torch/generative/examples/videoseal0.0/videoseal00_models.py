@@ -92,6 +92,10 @@ class VideoSeal00DetectorWrapper(nn.Module):
             model_card_path = videoseal_path / "cards" / "videoseal_0.0.yaml"
             self.model = videoseal.load(model_card_path)
         
+        # Note: We do NOT replace Upsample operations because:
+        # - Changing bilinear to nearest/ConvTranspose degrades accuracy significantly
+        # - The resulting GATHER_ND operations have minimal performance impact
+        
         if eval_mode:
             self.eval()
     
@@ -100,13 +104,17 @@ class VideoSeal00DetectorWrapper(nn.Module):
         Forward pass for watermark detection.
         
         Args:
-            imgs: Input images (batch, 3, H, W) in range [0, 1]
+            imgs: Input images (batch, H, W, 3) in range [0, 1] (NHWC format)
         
         Returns:
             preds: Predictions (batch, 97) with detection + 96-bit message
         """
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
         # Preprocess: [0, 1] → [-1, 1]
-        imgs_proc = self.model.detector.preprocess(imgs)
+        imgs_proc = self.model.detector.preprocess(imgs_nchw)
         
         # Run detection through SAM-Small
         preds = self.model.detector(imgs_proc)
@@ -199,6 +207,11 @@ class VideoSeal00EmbedderWrapper(nn.Module):
         self.model.embedder.unet.msg_processor = tflite_processor
         print("✓ Message processor replaced successfully")
         
+        # Note: We do NOT replace Upsample operations because:
+        # - Changing bilinear to nearest/ConvTranspose degrades accuracy significantly
+        # - The resulting GATHER_ND operations have minimal performance impact
+        # - Modern TFLite runtimes handle GATHER_ND efficiently
+        
         if eval_mode:
             self.eval()
     
@@ -207,24 +220,32 @@ class VideoSeal00EmbedderWrapper(nn.Module):
         Forward pass for watermark embedding.
         
         Args:
-            imgs: Input images (batch, 3, H, W) in range [0, 1]
+            imgs: Input images (batch, H, W, 3) in range [0, 1] (NHWC format)
             msgs: Binary messages (batch, 96) with values 0 or 1
         
         Returns:
-            imgs_w: Watermarked images (batch, 3, H, W) in range [0, 1]
+            imgs_w: Watermarked images (batch, H, W, 3) in range [0, 1] (NHWC format)
         """
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
         # Preprocess image: [0, 1] → [-1, 1]
-        imgs_proc = self.model.embedder.preprocess(imgs)
+        imgs_proc = self.model.embedder.preprocess(imgs_nchw)
         
         # Run embedding through UNet
         preds_w = self.model.embedder(imgs_proc, msgs)
         
         # Blend with original image
-        imgs_w = self.model.blender(imgs, preds_w)
+        imgs_w = self.model.blender(imgs_nchw, preds_w)
         
         # Clamp to [0, 1]
         if self.model.clamp:
             imgs_w = torch.clamp(imgs_w, 0, 1)
+        
+        # Convert back from NCHW to NHWC
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_w = imgs_w.permute(0, 2, 3, 1).contiguous()
         
         return imgs_w
 

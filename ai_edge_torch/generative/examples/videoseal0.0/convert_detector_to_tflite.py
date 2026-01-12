@@ -93,10 +93,10 @@ def convert_detector(output_dir, model_name="videoseal_0.0", image_size=256, sim
     model = create_detector(model_name=model_name, simple=simple)
     
     # Create sample input
-    # Image: (batch=1, channels=3, height, width) in [0, 1] range
-    sample_img = torch.rand(1, 3, image_size, image_size)
+    # Image: (batch=1, height, width, channels=3) in [0, 1] range (NHWC format)
+    sample_img = torch.rand(1, image_size, image_size, 3)
     
-    print(f"\nInput image shape: {sample_img.shape}")
+    print(f"\nInput image shape: {sample_img.shape} (NHWC format)")
     print(f"Input image range: [{sample_img.min():.2f}, {sample_img.max():.2f}]")
     
     # Test forward pass
