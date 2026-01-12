@@ -43,17 +43,52 @@ from videoseal.data.transforms import RGB2YUV
 from tflite_msg_processor import TFLiteFriendlyMsgProcessor, transfer_weights
 
 
+class TFLiteFriendlyRGB2YUV(nn.Module):
+    """TFLite-friendly RGB to YUV conversion for NHWC format.
+    
+    This version handles NHWC input directly without permutations,
+    avoiding shape mismatch issues during TFLite conversion.
+    """
+    def __init__(self):
+        super().__init__()
+        # RGB to YUV conversion matrix
+        self.register_buffer('M', torch.tensor([
+            [0.299, 0.587, 0.114],
+            [-0.14713, -0.28886, 0.436],
+            [0.615, -0.51499, -0.10001]
+        ], dtype=torch.float32))
+    
+    def forward(self, x):
+        """
+        Convert RGB to YUV for NHWC input.
+        
+        Args:
+            x: Tensor of shape (batch, height, width, 3) in NHWC format
+        
+        Returns:
+            yuv: Tensor of shape (batch, 3, height, width) in NCHW format
+        """
+        # x is already in NHWC format (batch, height, width, 3)
+        # Apply matrix multiplication: (B, H, W, 3) @ (3, 3) -> (B, H, W, 3)
+        yuv_nhwc = torch.matmul(x, self.M.T)
+        
+        # Convert to NCHW for the embedder
+        yuv = yuv_nhwc.permute(0, 3, 1, 2).contiguous()
+        
+        return yuv
+
+
 class VideoSealEmbedderWrapper(nn.Module):
     """Wrapper for VideoSeal Embedder that's optimized for TFLite conversion.
     
     The embedder takes an image and a binary message and produces a watermarked image.
     
     Input: 
-        - Image: (batch, channels=3, height, width) in [0, 1] range
+        - Image: (batch, height, width, channels=3) in [0, 1] range (NHWC format)
         - Message: (batch, 256) binary vector {0, 1}
     
     Output:
-        - Watermarked image: (batch, channels=3, height, width) in [0, 1] range
+        - Watermarked image: (batch, height, width, channels=3) in [0, 1] range (NHWC format)
     """
     
     def __init__(self, model_name="videoseal", eval_mode=True):
@@ -65,7 +100,13 @@ class VideoSealEmbedderWrapper(nn.Module):
         super().__init__()
         
         print(f"Loading VideoSeal model: {model_name}")
-        self.model = videoseal.load(model_name)
+        # Use absolute path to model card to avoid path resolution issues
+        import sys
+        videoseal_path = Path(sys.modules['videoseal'].__file__).parent
+        if model_name == "videoseal":
+            model_name = "videoseal_1.0"  # Default to VideoSeal 1.0
+        model_card_path = videoseal_path / "cards" / f"{model_name}.yaml"
+        self.model = videoseal.load(model_card_path)
         
         # Extract components
         self.embedder = self.model.embedder
@@ -83,19 +124,23 @@ class VideoSealEmbedderWrapper(nn.Module):
         Embed watermark into images.
         
         Args:
-            imgs: Tensor of shape (batch, 3, height, width) in [0, 1] range
+            imgs: Tensor of shape (batch, height, width, 3) in [0, 1] range (NHWC format)
             msgs: Tensor of shape (batch, 256) with binary values {0, 1}
         
         Returns:
-            imgs_w: Watermarked images of shape (batch, 3, height, width) in [0, 1] range
+            imgs_w: Watermarked images of shape (batch, height, width, 3) in [0, 1] range (NHWC format)
         """
-        original_size = imgs.shape[-2:]
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
+        original_size = imgs_nchw.shape[-2:]
         
         # Resize to processing size if needed
-        imgs_res = imgs
-        if imgs.shape[-2:] != (self.img_size, self.img_size):
+        imgs_res = imgs_nchw
+        if imgs_nchw.shape[-2:] != (self.img_size, self.img_size):
             imgs_res = F.interpolate(
-                imgs, 
+                imgs_nchw, 
                 size=(self.img_size, self.img_size),
                 mode='bilinear',
                 align_corners=False,
@@ -121,14 +166,18 @@ class VideoSealEmbedderWrapper(nn.Module):
             )
         
         # Blend watermark with original image
-        imgs_w = self.blender(imgs, preds_w)
+        imgs_w = self.blender(imgs_nchw, preds_w)
         
         # Apply attenuation if available
         if self.attenuation is not None:
-            imgs_w = self.attenuation(imgs, imgs_w)
+            imgs_w = self.attenuation(imgs_nchw, imgs_w)
         
         # Clamp to valid range
         imgs_w = torch.clamp(imgs_w, 0, 1)
+        
+        # Convert back from NCHW to NHWC
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_w = imgs_w.permute(0, 2, 3, 1).contiguous()
         
         return imgs_w
 
@@ -139,7 +188,7 @@ class VideoSealDetectorWrapper(nn.Module):
     The detector takes a potentially watermarked image and extracts the embedded message.
     
     Input:
-        - Image: (batch, channels=3, height, width) in [0, 1] range
+        - Image: (batch, height, width, channels=3) in [0, 1] range (NHWC format)
     
     Output:
         - Predictions: (batch, 257, height_out, width_out)
@@ -156,7 +205,13 @@ class VideoSealDetectorWrapper(nn.Module):
         super().__init__()
         
         print(f"Loading VideoSeal model: {model_name}")
-        self.model = videoseal.load(model_name)
+        # Use absolute path to model card to avoid path resolution issues
+        import sys
+        videoseal_path = Path(sys.modules['videoseal'].__file__).parent
+        if model_name == "videoseal":
+            model_name = "videoseal_1.0"  # Default to VideoSeal 1.0
+        model_card_path = videoseal_path / "cards" / f"{model_name}.yaml"
+        self.model = videoseal.load(model_card_path)
         
         # Extract detector
         self.detector = self.model.detector
@@ -170,18 +225,22 @@ class VideoSealDetectorWrapper(nn.Module):
         Detect watermark from images.
         
         Args:
-            imgs: Tensor of shape (batch, 3, height, width) in [0, 1] range
+            imgs: Tensor of shape (batch, height, width, 3) in [0, 1] range (NHWC format)
         
         Returns:
             preds: Tensor of shape (batch, 257, height_out, width_out)
                    Channel 0: Detection mask
                    Channels 1-256: Message bits (apply sigmoid + threshold at 0.5 for binary)
         """
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
         # Resize to processing size if needed
-        imgs_res = imgs
-        if imgs.shape[-2:] != (self.img_size, self.img_size):
+        imgs_res = imgs_nchw
+        if imgs_nchw.shape[-2:] != (self.img_size, self.img_size):
             imgs_res = F.interpolate(
-                imgs,
+                imgs_nchw,
                 size=(self.img_size, self.img_size),
                 mode='bilinear',
                 align_corners=False,
@@ -205,13 +264,40 @@ class VideoSealEmbedderSimple(nn.Module):
         super().__init__()
         
         print(f"Loading VideoSeal model: {model_name}")
-        self.model = videoseal.load(model_name)
+        # Use absolute path to model card to avoid path resolution issues
+        import sys
+        videoseal_path = Path(sys.modules['videoseal'].__file__).parent
+        if model_name == "videoseal":
+            model_name = "videoseal_1.0"  # Default to VideoSeal 1.0
+        model_card_path = videoseal_path / "cards" / f"{model_name}.yaml"
+        self.model = videoseal.load(model_card_path)
         
         self.embedder = self.model.embedder
         self.blender = self.model.blender
         self.attenuation = self.model.attenuation
-        self.rgb2yuv = RGB2YUV()
+        self.rgb2yuv = TFLiteFriendlyRGB2YUV()  # Use TFLite-friendly version for NHWC input
         self.yuv_mode = self.embedder.yuv
+        
+        # Replace message processor with TFLite-friendly version
+        # Calculate spatial size at bottleneck (for 256x256 images)
+        num_downs = len(self.embedder.unet.downs)
+        spatial_size = 256 // (2 ** num_downs)
+        
+        original_msg_proc = self.embedder.unet.msg_processor
+        self.tflite_msg_processor = TFLiteFriendlyMsgProcessor(
+            nbits=original_msg_proc.nbits,
+            hidden_size=original_msg_proc.hidden_size,
+            spatial_size=spatial_size,
+            msg_processor_type=original_msg_proc.msg_processor_type,
+            msg_mult=original_msg_proc.msg_mult
+        )
+        
+        # Transfer weights from original to TFLite processor
+        transfer_weights(original_msg_proc, self.tflite_msg_processor)
+        
+        # Replace message processor in UNet
+        self.embedder.unet.msg_processor = self.tflite_msg_processor
+        print(f"✓ TFLite-friendly message processor installed (spatial_size={spatial_size})")
         
         if eval_mode:
             self.eval()
@@ -219,27 +305,36 @@ class VideoSealEmbedderSimple(nn.Module):
     def forward(self, imgs, msgs):
         """
         Args:
-            imgs: (batch, 3, 256, 256) in [0, 1]
+            imgs: (batch, 256, 256, 3) in [0, 1] (NHWC format)
             msgs: (batch, 256) binary
         Returns:
-            imgs_w: (batch, 3, 256, 256) in [0, 1]
+            imgs_w: (batch, 256, 256, 3) in [0, 1] (NHWC format)
         """
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
         # Generate watermark
         if self.yuv_mode:
+            # rgb2yuv expects NHWC input and returns NCHW
             imgs_yuv = self.rgb2yuv(imgs)
             preds_w = self.embedder(imgs_yuv[:, 0:1], msgs)
         else:
-            preds_w = self.embedder(imgs, msgs)
+            preds_w = self.embedder(imgs_nchw, msgs)
         
         # Blend
-        imgs_w = self.blender(imgs, preds_w)
+        imgs_w = self.blender(imgs_nchw, preds_w)
         
-        # Attenuate
-        if self.attenuation is not None:
-            imgs_w = self.attenuation(imgs, imgs_w)
+        # Attenuate (disable for TFLite - uses boolean indexing)
+        # if self.attenuation is not None:
+        #     imgs_w = self.attenuation(imgs_nchw, imgs_w)
         
         # Clamp
         imgs_w = torch.clamp(imgs_w, 0, 1)
+        
+        # Convert back from NCHW to NHWC
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_w = imgs_w.permute(0, 2, 3, 1).contiguous()
         
         return imgs_w
 
@@ -255,7 +350,13 @@ class VideoSealDetectorSimple(nn.Module):
         super().__init__()
         
         print(f"Loading VideoSeal model: {model_name}")
-        self.model = videoseal.load(model_name)
+        # Use absolute path to model card to avoid path resolution issues
+        import sys
+        videoseal_path = Path(sys.modules['videoseal'].__file__).parent
+        if model_name == "videoseal":
+            model_name = "videoseal_1.0"  # Default to VideoSeal 1.0
+        model_card_path = videoseal_path / "cards" / f"{model_name}.yaml"
+        self.model = videoseal.load(model_card_path)
         self.detector = self.model.detector
         
         if eval_mode:
@@ -264,11 +365,15 @@ class VideoSealDetectorSimple(nn.Module):
     def forward(self, imgs):
         """
         Args:
-            imgs: (batch, 3, 256, 256) in [0, 1]
+            imgs: (batch, 256, 256, 3) in [0, 1] (NHWC format)
         Returns:
             preds: (batch, 257, height_out, width_out)
         """
-        return self.detector(imgs)
+        # Convert from NHWC to NCHW for PyTorch model
+        # Use .contiguous() to avoid GATHER_ND operations in TFLite
+        imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
+        
+        return self.detector(imgs_nchw)
 
 
 def create_embedder(model_name="videoseal", simple=True):

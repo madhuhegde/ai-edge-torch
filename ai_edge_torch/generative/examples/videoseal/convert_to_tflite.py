@@ -68,9 +68,9 @@ def convert_embedder(output_dir, model_name="videoseal", image_size=256, simple=
     model = create_embedder(model_name=model_name, simple=simple)
     
     # Create sample inputs
-    # Image: (batch=1, channels=3, height, width) in [0, 1] range
+    # Image: (batch=1, height, width, channels=3) in [0, 1] range (NHWC format)
     # Message: (batch=1, 256 bits) binary vector
-    sample_img = torch.rand(1, 3, image_size, image_size)
+    sample_img = torch.rand(1, image_size, image_size, 3)
     sample_msg = torch.randint(0, 2, (1, 256)).float()
     
     print(f"Input image shape: {sample_img.shape}")
@@ -137,8 +137,8 @@ def convert_detector(output_dir, model_name="videoseal", image_size=256, simple=
     model = create_detector(model_name=model_name, simple=simple)
     
     # Create sample input
-    # Image: (batch=1, channels=3, height, width) in [0, 1] range
-    sample_img = torch.rand(1, 3, image_size, image_size)
+    # Image: (batch=1, height, width, channels=3) in [0, 1] range (NHWC format)
+    sample_img = torch.rand(1, image_size, image_size, 3)
     
     print(f"Input image shape: {sample_img.shape}")
     print(f"Input image range: [{sample_img.min():.2f}, {sample_img.max():.2f}]")
