@@ -343,7 +343,7 @@ class VideoSealDetectorSimple(nn.Module):
     """Simplified detector for fixed-size images (256x256).
     
     This version is optimized for TFLite conversion by removing dynamic resizing.
-    Use this for fixed-size image processing.
+    Use this for fixed-size image processing with NHWC input/output format.
     """
     
     def __init__(self, model_name="videoseal", eval_mode=True):
@@ -365,15 +365,23 @@ class VideoSealDetectorSimple(nn.Module):
     def forward(self, imgs):
         """
         Args:
-            imgs: (batch, 256, 256, 3) in [0, 1] (NHWC format)
+            imgs: (batch, height, width, channels=3) in [0, 1] (NHWC format)
         Returns:
-            preds: (batch, 257, height_out, width_out)
+            preds: (batch, 257) - Detection confidence + 256-bit message
+                   Note: For spatial outputs, this averages across spatial dimensions
         """
         # Convert from NHWC to NCHW for PyTorch model
         # Use .contiguous() to avoid GATHER_ND operations in TFLite
         imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
         
-        return self.detector(imgs_nchw)
+        # Run detector (expects NCHW input)
+        preds = self.detector(imgs_nchw)  # (batch, 257, H, W) or (batch, 257)
+        
+        # If output is spatial (4D), average across spatial dimensions for TFLite compatibility
+        if len(preds.shape) == 4:
+            preds = preds.mean(dim=(2, 3))  # (batch, 257)
+        
+        return preds
 
 
 def create_embedder(model_name="videoseal", simple=True):

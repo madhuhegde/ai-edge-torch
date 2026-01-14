@@ -89,10 +89,10 @@ def convert_detector(output_dir, model_name="videoseal", image_size=256, simple=
     model = create_detector(model_name=model_name, simple=simple)
     
     # Create sample input
-    # Image: (batch=1, channels=3, height, width) in [0, 1] range
-    sample_img = torch.rand(1, 3, image_size, image_size)
+    # Image: (batch=1, height, width, channels=3) in [0, 1] range (NHWC format)
+    sample_img = torch.rand(1, image_size, image_size, 3)
     
-    print(f"\nInput image shape: {sample_img.shape}")
+    print(f"\nInput image shape: {sample_img.shape} (NHWC format)")
     print(f"Input image range: [{sample_img.min():.2f}, {sample_img.max():.2f}]")
     
     # Test forward pass
@@ -101,13 +101,15 @@ def convert_detector(output_dir, model_name="videoseal", image_size=256, simple=
         output = model(sample_img)
     
     print(f"Output shape: {output.shape}")
-    print(f"  Channel 0: Detection mask")
-    print(f"  Channels 1-256: Message bits")
+    print(f"  Channel 0: Detection confidence")
+    print(f"  Channels 1-256: Message bits (256-bit capacity)")
     print(f"Output range: [{output.min():.2f}, {output.max():.2f}]")
     
     # Extract message (apply threshold)
     detected_msg = (output[0, 1:] > 0).float()
-    print(f"Detected message (first 32 bits): {detected_msg[:32].int().tolist()}")
+    num_ones = detected_msg.sum().int().item()
+    print(f"Detected message: {num_ones}/256 bits are 1")
+    print(f"First 32 bits: {detected_msg[:32].int().tolist()}")
     
     print(f"\nConverting to TFLite ({quant_name})...")
     

@@ -47,6 +47,10 @@ Usage:
 import argparse
 import os
 from pathlib import Path
+import sys
+
+# Add the videoseal project root to sys.path for module discovery
+sys.path.insert(0, "/home/madhuhegde/work/videoseal")
 
 import torch
 import ai_edge_torch
