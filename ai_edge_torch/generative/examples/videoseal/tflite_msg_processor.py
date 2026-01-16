@@ -87,11 +87,12 @@ class TFLiteFriendlyMsgProcessor(nn.Module):
             raise ValueError(f"Invalid msg_processor_type: {self.msg_processor_type}")
         
         # Pre-compute base indices (NEW - eliminates torch.arange at runtime)
+        # Use INT32 for HW delegate compatibility (instead of default INT64)
         if self.msg_type.startswith("bin"):
-            base_indices = 2 * torch.arange(nbits)
+            base_indices = 2 * torch.arange(nbits, dtype=torch.int32)
             self.register_buffer('base_indices', base_indices)
         elif self.msg_type.startswith("gau"):
-            base_indices = torch.arange(nbits)
+            base_indices = torch.arange(nbits, dtype=torch.int32)
             self.register_buffer('base_indices', base_indices)
     
     def forward(
@@ -118,7 +119,7 @@ class TFLiteFriendlyMsgProcessor(nn.Module):
         if self.msg_type.startswith("bin"):
             # Use pre-computed indices (no torch.arange)
             indices = self.base_indices.unsqueeze(0).expand(msg.shape[0], -1)
-            indices = (indices + msg).long()
+            indices = (indices + msg).int()  # Use int() for INT32 instead of long() for INT64
             
             # Embedding lookup
             msg_aux = self.msg_embeddings(indices)  # [B, nbits, hidden_size]

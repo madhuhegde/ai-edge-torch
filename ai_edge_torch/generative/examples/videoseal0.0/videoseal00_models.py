@@ -230,6 +230,11 @@ class VideoSeal00EmbedderWrapper(nn.Module):
         # Use .contiguous() to avoid GATHER_ND operations in TFLite
         imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
         
+        # Convert message to INT32 for TFLite compatibility
+        # PyTorch defaults to INT64, but TFLite HW delegates prefer INT32
+        if msgs.dtype == torch.int64:
+            msgs = msgs.to(torch.int32)
+        
         # Preprocess image: [0, 1] → [-1, 1]
         imgs_proc = self.model.embedder.preprocess(imgs_nchw)
         

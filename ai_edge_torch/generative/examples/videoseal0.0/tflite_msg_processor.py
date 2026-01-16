@@ -74,16 +74,16 @@ class TFLiteFriendlyMsgProcessor(nn.Module):
             
             # Pre-compute base indices (FIXED SIZE - TFLite compatible)
             # Original: indices = 2 * torch.arange(msg.shape[-1])  # ❌ Dynamic
-            # Fixed: Pre-compute at init
-            base_indices = 2 * torch.arange(nbits)  # ✅ Static
+            # Fixed: Pre-compute at init with INT32 for HW delegate compatibility
+            base_indices = 2 * torch.arange(nbits, dtype=torch.int32)  # ✅ Static INT32
             self.register_buffer('base_indices', base_indices)
             
         elif self.msg_type.startswith("gau"):
             # Gaussian: 1 embedding per bit
             self.msg_embeddings = nn.Embedding(nbits, hidden_size)
             
-            # Pre-compute indices for gaussian
-            indices = torch.arange(nbits)
+            # Pre-compute indices for gaussian with INT32 for HW delegate compatibility
+            indices = torch.arange(nbits, dtype=torch.int32)
             self.register_buffer('gaussian_indices', indices)
         else:
             raise ValueError(f"Invalid msg_type: {self.msg_type}")
@@ -108,7 +108,8 @@ class TFLiteFriendlyMsgProcessor(nn.Module):
             # Original: indices = 2 * torch.arange(msg.shape[-1])  # ❌ Dynamic
             # Fixed: Use pre-computed buffer
             indices = self.base_indices.unsqueeze(0).expand(msg.shape[0], -1)  # ✅ Static
-            indices = (indices + msg).long()
+            # Use .int() instead of .long() for INT32 (TFLite HW delegate compatible)
+            indices = (indices + msg).int()
             
             # Create embeddings
             msg_aux = self.msg_embeddings(indices)  # batch, nbits, hidden_size

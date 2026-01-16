@@ -310,6 +310,9 @@ class VideoSealEmbedderSimple(nn.Module):
         Returns:
             imgs_w: (batch, 256, 256, 3) in [0, 1] (NHWC format)
         """
+        # Cast message to int32 for TFLite compatibility (avoid INT64)
+        msgs = msgs.to(torch.int32)
+        
         # Convert from NHWC to NCHW for PyTorch model
         # Use .contiguous() to avoid GATHER_ND operations in TFLite
         imgs_nchw = imgs.permute(0, 3, 1, 2).contiguous()
